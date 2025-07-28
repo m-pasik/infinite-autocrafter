@@ -128,6 +128,62 @@ Recipe *Data_recipe_get(Data *data, size_t first, size_t second)
     return NULL;
 }
 
+static void ItemMap_insert_internal(ItemMap *item_map, Item *item)
+{
+    const size_t item_hash = hash_string(item->text, item_map->bits);
+    size_t i;
+    for (i = item_hash; item_map->data[i]; i = (i + 1) & (item_map->size - 1)) continue;
+    item_map->data[i] = item;
+    item_map->count++;
+}
+
+static void ItemMap_rehash(ItemMap *item_map, Items *items)
+{
+    memset(item_map->data, 0, item_map->size * sizeof(Item *));
+    item_map->count = 0;
+    for (size_t i = 0; i < items->length; i++)
+        ItemMap_insert_internal(item_map, items->list + i);
+}
+
+static void ItemMap_insert(ItemMap *item_map, Items *items, Item *item)
+{
+    if ((float)item_map->count / item_map->size > item_map->load_factor) {
+        item_map->size *= 2;
+        item_map->bits++;
+        item_map->data = realloc(item_map->data, item_map->size * sizeof(Item *));
+        ItemMap_rehash(item_map, items);
+    }
+    ItemMap_insert_internal(item_map, item);
+}
+
+static void RecipeMap_insert_internal(RecipeMap *recipe_map, Recipe *recipe)
+{
+    const size_t recipe_hash = hash_ids(recipe->first, recipe->second, recipe_map->bits);
+    size_t i;
+    for (i = recipe_hash; recipe_map->data[i]; i = (i + 1) & (recipe_map->size - 1)) continue;
+    recipe_map->data[i] = recipe;
+    recipe_map->count++;
+}
+
+static void RecipeMap_rehash(RecipeMap *recipe_map, Recipes *recipes)
+{
+    memset(recipe_map->data, 0, recipe_map->size * sizeof(Recipe *));
+    recipe_map->count = 0;
+    for (size_t i = 0; i < recipes->length; i++)
+        RecipeMap_insert_internal(recipe_map, recipes->list + i);
+}
+
+static void RecipeMap_insert(RecipeMap *recipe_map, Recipes *recipes, Recipe *recipe)
+{
+    if ((float)recipe_map->count / recipe_map->size > recipe_map->load_factor) {
+        recipe_map->size *= 2;
+        recipe_map->bits++;
+        recipe_map->data = realloc(recipe_map->data, recipe_map->size * sizeof(Recipe *));
+        RecipeMap_rehash(recipe_map, recipes);
+    }
+    RecipeMap_insert_internal(recipe_map, recipe);
+}
+
 static char *StringBuffer_insert(StringBuffer *strings, const char *text)
 {
     size_t len = strlen(text);
@@ -135,7 +191,7 @@ static char *StringBuffer_insert(StringBuffer *strings, const char *text)
     if (strings->length + len + 1 > strings->size) {
         while (strings->length + len + 1 > strings->size)
             strings->size *= 2;
-        strings->data = realloc(strings->data, strings->size);
+        strings->data = realloc(strings->data, strings->size * sizeof(char));
     }
 
     char *string = strings->data + strings->length;
@@ -145,12 +201,16 @@ static char *StringBuffer_insert(StringBuffer *strings, const char *text)
     return string;
 }
 
-static Item *Items_insert(Items *items, StringBuffer *strings, ItemData item_dat)
+static Item *Items_insert(Data *data, ItemData item_dat)
 {
+    Items *items = &data->item_arr;
+    ItemMap *item_map = &data->item_map;
+    StringBuffer *strings = &data->strings;
+
     if (items->length + 1 > items->size) {
-        while (items->length + 1 > items->size)
-            items->size *= 2;
-        items->list = realloc(items->list, items->size);
+        items->size *= 2;
+        items->list = realloc(items->list, items->size * sizeof(Item));
+        ItemMap_rehash(item_map, items);
     }
 
     Item *item = items->list + items->length;
@@ -163,12 +223,15 @@ static Item *Items_insert(Items *items, StringBuffer *strings, ItemData item_dat
     return item;
 }
 
-static Recipe *Recipes_insert(Recipes *recipes, RecipeData recipe_dat, size_t result)
+static Recipe *Recipes_insert(Data *data, RecipeData recipe_dat, size_t result)
 {
+    Recipes *recipes = &data->recipe_arr;
+    RecipeMap *recipe_map = &data->recipe_map;
+
     if (recipes->length + 1 > recipes->size) {
-        while (recipes->length + 1 > recipes->size)
-            recipes->size *= 2;
-        recipes->list = realloc(recipes->list, recipes->size);
+        recipes->size *= 2;
+        recipes->list = realloc(recipes->list, recipes->size * sizeof(Recipe));
+        RecipeMap_rehash(recipe_map, recipes);
     }
 
     Recipe *recipe = recipes->list + recipes->length;
@@ -178,48 +241,6 @@ static Recipe *Recipes_insert(Recipes *recipes, RecipeData recipe_dat, size_t re
     recipes->length++;
 
     return recipe;
-}
-
-static void ItemMap_insert_internal(ItemMap *item_map, Item *item)
-{
-    const size_t item_hash = hash_string(item->text, item_map->bits);
-    size_t i;
-    for (i = item_hash; item_map->data[i]; i = (i + 1) & (item_map->size - 1)) continue;
-    item_map->data[i] = item;
-}
-
-static void ItemMap_insert(ItemMap *item_map, Items *items, Item *item)
-{
-    if ((float)item_map->count / item_map->size > item_map->load_factor) {
-        item_map->size *= 2;
-        item_map->bits++;
-        item_map->data = realloc(item_map->data, item_map->size);
-        memset(item_map->data, 0, item_map->size * sizeof(Item *));
-        for (size_t i = 0; i < items->length; i++)
-            ItemMap_insert_internal(item_map, items->list + i);
-    }
-    ItemMap_insert_internal(item_map, item);
-}
-
-static void RecipeMap_insert_internal(RecipeMap *recipe_map, Recipe *recipe)
-{
-    const size_t recipe_hash = hash_ids(recipe->first, recipe->second, recipe_map->bits);
-    size_t i;
-    for (i = recipe_hash; recipe_map->data[i]; i = (i + 1) & (recipe_map->size - 1)) continue;
-    recipe_map->data[i] = recipe;
-}
-
-static void RecipeMap_insert(RecipeMap *recipe_map, Recipes *recipes, Recipe *recipe)
-{
-    if ((float)recipe_map->count / recipe_map->size > recipe_map->load_factor) {
-        recipe_map->size *= 2;
-        recipe_map->bits++;
-        recipe_map->data = realloc(recipe_map->data, recipe_map->size);
-        memset(recipe_map->data, 0, recipe_map->size * sizeof(Recipe *));
-        for (size_t i = 0; i < recipes->length; i++)
-            RecipeMap_insert_internal(recipe_map, recipes->list + i);
-    }
-    RecipeMap_insert_internal(recipe_map, recipe);
 }
 
 Item *Data_item_insert(Data *data, ItemData item_dat)
@@ -237,7 +258,7 @@ Item *Data_item_insert(Data *data, ItemData item_dat)
         }
     }
     if (!item_exists) {
-        item = Items_insert(&data->item_arr, &data->strings, item_dat);
+        item = Items_insert(data, item_dat);
         ItemMap_insert(&data->item_map, &data->item_arr, item);
     }
 
@@ -259,7 +280,7 @@ Recipe *Data_recipe_insert(Data *data, RecipeData recipe_dat, size_t result)
         }
     }
     if (!recipe_exists) {
-        recipe = Recipes_insert(&data->recipe_arr, recipe_dat, result);
+        recipe = Recipes_insert(data, recipe_dat, result);
         RecipeMap_insert(&data->recipe_map, &data->recipe_arr, recipe);
     }
 
@@ -282,12 +303,12 @@ DataResult Data_insert(Data *data, ItemData item_dat, RecipeData recipe_dat)
         }
     }
     if (!item_exists) {
-        item = Items_insert(&data->item_arr, &data->strings, item_dat);
+        item = Items_insert(data, item_dat);
         ItemMap_insert(&data->item_map, &data->item_arr, item);
     }
 
     // Insert recipe
-    Recipe *recipe = Recipes_insert(&data->recipe_arr, recipe_dat, item->id);
+    Recipe *recipe = Recipes_insert(data, recipe_dat, item->id);
     RecipeMap_insert(&data->recipe_map, &data->recipe_arr, recipe);
 
     DataResult dat = { item, recipe };

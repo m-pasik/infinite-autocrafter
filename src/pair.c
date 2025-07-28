@@ -14,10 +14,6 @@ static size_t write_callback(void *contents, size_t size, size_t nmemb, void *us
     char **response_ptr = (char **)userp;
 
     *response_ptr = realloc(*response_ptr, strlen(*response_ptr) + totalSize + 1);
-    if (*response_ptr == NULL) {
-        fprintf(stderr, "realloc() failed\n");
-        return 0;
-    }
 
     strncat(*response_ptr, contents, totalSize);
     return totalSize;
