@@ -19,7 +19,7 @@ static size_t write_callback(void *contents, size_t size, size_t nmemb, void *us
     return totalSize;
 }
 
-ResultGET *ic_get_result(char *first, char *second)
+ResultGET *ic_get_result(const char *first, const char *second)
 {
     CURL *curl;
     CURLcode res;
@@ -45,8 +45,9 @@ ResultGET *ic_get_result(char *first, char *second)
     if (curl) {
         headers = curl_slist_append(headers, "User-Agent: Hello, World!");
         headers = curl_slist_append(headers, "Accept: */*");
-        headers = curl_slist_append(headers, "Accept-Language: en");
+        headers = curl_slist_append(headers, "Accept-Language: en-US,en;q=0.5");
         headers = curl_slist_append(headers, "Alt-Used: neal.fun");
+        headers = curl_slist_append(headers, "Connection: keep_alive");
         headers = curl_slist_append(headers, "Sec-Fetch-Dest: empty");
         headers = curl_slist_append(headers, "Sec-Fetch-Mode: cors");
         headers = curl_slist_append(headers, "Sec-Fetch-Site: same-origin");
@@ -57,10 +58,10 @@ ResultGET *ic_get_result(char *first, char *second)
         curl_easy_setopt(curl, CURLOPT_REFERER, "https://neal.fun/infinite-craft/");
         curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
         curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-        curl_easy_setopt(curl, CURLOPT_COOKIEFILE, "");
+        curl_easy_setopt(curl, CURLOPT_COOKIEFILE, "cookies.txt");
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
-        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 5L);
 
         res = curl_easy_perform(curl);
 
@@ -144,7 +145,11 @@ ResultPair ic_new_pair(Data *data, struct xoshiro256pp_state *state)
 
     if (strcmp(result->result, "Nothing")) {
         DataResult dat = Data_insert(data, item_dat, recipe_dat);
+        pair_res.first = &items->list[a];
+        pair_res.second = &items->list[b];
         pair_res.result = dat.item;
+    } else {
+        pair_res.result = NULL;
     }
 
     ic_free(result);

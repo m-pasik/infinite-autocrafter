@@ -5,32 +5,37 @@
 #include <stddef.h>
 #include <stdint.h>
 
-typedef struct {
-    size_t size;
-    size_t length;
+typedef struct StringChunk {
+    size_t used;
     char *data;
+    struct StringChunk *next;
+} StringChunk;
+
+typedef struct StringBuffer {
+    StringChunk *head;
+    size_t chunk_size;
 } StringBuffer;
 
-typedef struct {
+typedef struct ItemData {
     const char *text;
     const char *emoji;
     bool discovery;
 } ItemData;
 
-typedef struct {
+typedef struct Item {
     size_t id;
-    char *text;
-    char *emoji;
+    const char *text;
+    const char *emoji;
     bool discovery;
 } Item;
 
-typedef struct {
+typedef struct Items {
     size_t size;
     size_t length;
     Item *list;
 } Items;
 
-typedef struct {
+typedef struct ItemMap {
     size_t size;
     size_t count;
     float load_factor;
@@ -38,24 +43,24 @@ typedef struct {
     Item **data;
 } ItemMap;
 
-typedef struct {
+typedef struct RecipeData {
     size_t first;
     size_t second;
 } RecipeData;
 
-typedef struct {
+typedef struct Recipe {
     size_t first;
     size_t second;
     size_t result;
 } Recipe;
 
-typedef struct {
+typedef struct Recipes {
     size_t size;
     size_t length;
     Recipe *list;
 } Recipes;
 
-typedef struct {
+typedef struct RecipeMap {
     size_t size;
     size_t count;
     float load_factor;
@@ -63,7 +68,7 @@ typedef struct {
     Recipe **data;
 } RecipeMap;
 
-typedef struct {
+typedef struct Data {
     StringBuffer strings;
     Items item_arr;
     Recipes recipe_arr;
@@ -71,12 +76,12 @@ typedef struct {
     RecipeMap recipe_map;
 } Data;
 
-typedef struct {
+typedef struct DataResult {
     Item *item;
     Recipe *recipe;
 } DataResult;
 
-void Data_init(Data *data, size_t reserve_items, size_t reserve_recipes, size_t reserve_strings);
+void Data_init(Data *data, size_t reserve_items, size_t reserve_recipes, size_t string_chunk_size);
 
 void Data_free(Data *data);
 

@@ -17,7 +17,7 @@ typedef struct {
     Item *result;
 } ResultPair;
 
-ResultGET *ic_get_result(char *first, char *second);
+ResultGET *ic_get_result(const char *first, const char *second);
 
 void ic_free(ResultGET *pair_res);
 

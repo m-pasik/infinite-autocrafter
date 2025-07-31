@@ -58,14 +58,23 @@ static void calc_size(size_t min_size, float load_factor, size_t *size, uint8_t 
     }
 }
 
-void Data_init(Data *data, size_t reserve_items, size_t reserve_recipes, size_t reserve_strings)
+static StringChunk *StringChunk_create(size_t chunk_size)
+{
+    StringChunk *chunk = malloc(sizeof(StringChunk));
+    chunk->data = malloc(chunk_size);
+    chunk->used = 0;
+    chunk->next = NULL;
+
+    return chunk;
+}
+
+void Data_init(Data *data, size_t reserve_items, size_t reserve_recipes, size_t string_chunk_size)
 {
     // Initialize dynamic arrays
     {
         // Initialize the string buffer
-        data->strings.size = reserve_strings;
-        data->strings.length = 0;
-        data->strings.data = malloc(reserve_strings * sizeof(char));
+        data->strings.chunk_size = string_chunk_size;
+        data->strings.head = StringChunk_create(string_chunk_size);
 
         // Initialize the item array
         data->item_arr.size = reserve_items;
@@ -103,7 +112,11 @@ void Data_init(Data *data, size_t reserve_items, size_t reserve_recipes, size_t 
 
 void Data_free(Data *data)
 {
-    free(data->strings.data);
+    for (StringChunk *curr = data->strings.head, *next; curr; curr = next) {
+        next = curr->next;
+        free(curr->data);
+        free(curr);
+    }
     free(data->item_arr.list);
     free(data->recipe_arr.list);
     free(data->item_map.data);
@@ -152,8 +165,9 @@ static void ItemMap_insert(ItemMap *item_map, Items *items, Item *item)
         item_map->bits++;
         item_map->data = realloc(item_map->data, item_map->size * sizeof(Item *));
         ItemMap_rehash(item_map, items);
+    } else {
+        ItemMap_insert_internal(item_map, item);
     }
-    ItemMap_insert_internal(item_map, item);
 }
 
 static void RecipeMap_insert_internal(RecipeMap *recipe_map, Recipe *recipe)
@@ -180,23 +194,28 @@ static void RecipeMap_insert(RecipeMap *recipe_map, Recipes *recipes, Recipe *re
         recipe_map->bits++;
         recipe_map->data = realloc(recipe_map->data, recipe_map->size * sizeof(Recipe *));
         RecipeMap_rehash(recipe_map, recipes);
+    } else {
+        RecipeMap_insert_internal(recipe_map, recipe);
     }
-    RecipeMap_insert_internal(recipe_map, recipe);
 }
 
-static char *StringBuffer_insert(StringBuffer *strings, const char *text)
+static const char *StringBuffer_insert(StringBuffer *strings, const char *text)
 {
-    size_t len = strlen(text);
+    size_t len = strlen(text) + 1;
 
-    if (strings->length + len + 1 > strings->size) {
-        while (strings->length + len + 1 > strings->size)
-            strings->size *= 2;
-        strings->data = realloc(strings->data, strings->size * sizeof(char));
+    if (len > strings->chunk_size)
+        return NULL;
+
+    if (strings->chunk_size - strings->head->used < len) {
+        StringChunk *new_chunk = StringChunk_create(strings->chunk_size);
+
+        new_chunk->next = strings->head;
+        strings->head = new_chunk;
     }
 
-    char *string = strings->data + strings->length;
-    strncpy(string, text, len + 1);
-    strings->length += len + 1;
+    char *string = strings->head->data + strings->head->used;
+    memcpy(string, text, len);
+    strings->head->used += len;
 
     return string;
 }
