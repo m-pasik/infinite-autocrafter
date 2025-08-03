@@ -80,12 +80,11 @@ Save *load_save(const char *filename)
 
     json_object *items_obj;
 
-    if (!json_object_object_get_ex(parsed_json, "items", &items_obj)) {
-    }
+    json_object_object_get_ex(parsed_json, "items", &items_obj);
 
     size_t itemc = json_object_array_length(items_obj);
 
-    Data_init(data, MAX(512, itemc), MAX(2048, itemc * 4), 16384);
+    Data_init(data, MAX(1024, itemc), MAX(4096, itemc * 4), 32768);
 
     for (size_t i = 0; i < itemc; i++) {
         json_object *item_obj = json_object_array_get_idx(items_obj, i);

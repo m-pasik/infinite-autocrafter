@@ -65,7 +65,8 @@ typedef struct RecipeMap {
     size_t count;
     float load_factor;
     uint8_t bits;
-    Recipe **data;
+    Recipe **recipes;
+    Recipe **results;
 } RecipeMap;
 
 typedef struct Data {
@@ -86,6 +87,8 @@ void Data_init(Data *data, size_t reserve_items, size_t reserve_recipes, size_t 
 void Data_free(Data *data);
 
 Item *Data_item_get(Data *data, const char *text);
+
+bool Data_has_recipe(Data *data, size_t id);
 
 Recipe *Data_recipe_get(Data *data, size_t first, size_t second);
 

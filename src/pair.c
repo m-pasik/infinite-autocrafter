@@ -1,23 +1,12 @@
 #include "pair.h"
 
+#include "net_utils.h"
+
 #include <curl/curl.h>
 #include <json-c/json.h>
-#include <json-c/json_object.h>
-#include <json-c/json_tokener.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
-
-static size_t write_callback(void *contents, size_t size, size_t nmemb, void *userp)
-{
-    size_t totalSize = size * nmemb;
-    char **response_ptr = (char **)userp;
-
-    *response_ptr = realloc(*response_ptr, strlen(*response_ptr) + totalSize + 1);
-
-    strncat(*response_ptr, contents, totalSize);
-    return totalSize;
-}
 
 ResultGET *ic_get_result(const char *first, const char *second)
 {
@@ -37,46 +26,50 @@ ResultGET *ic_get_result(const char *first, const char *second)
     char *url = malloc(size);
     snprintf(url, size, format, first_escaped, second_escaped);
 
-    ResultGET *pair_res = malloc(sizeof(ResultGET));
+    ResultGET *pair_res = NULL;
 
     char *response = malloc(1);
     response[0] = '\0';
 
-    if (curl) {
-        headers = curl_slist_append(headers, "User-Agent: Hello, World!");
-        headers = curl_slist_append(headers, "Accept: */*");
-        headers = curl_slist_append(headers, "Accept-Language: en-US,en;q=0.5");
-        headers = curl_slist_append(headers, "Alt-Used: neal.fun");
-        headers = curl_slist_append(headers, "Connection: keep_alive");
-        headers = curl_slist_append(headers, "Sec-Fetch-Dest: empty");
-        headers = curl_slist_append(headers, "Sec-Fetch-Mode: cors");
-        headers = curl_slist_append(headers, "Sec-Fetch-Site: same-origin");
-        headers = curl_slist_append(headers, "Sec-GPC: 1");
-        headers = curl_slist_append(headers, "Priority: u=0");
-
-        curl_easy_setopt(curl, CURLOPT_URL, url);
-        curl_easy_setopt(curl, CURLOPT_REFERER, "https://neal.fun/infinite-craft/");
-        curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-        curl_easy_setopt(curl, CURLOPT_COOKIEFILE, "cookies.txt");
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
-        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 5L);
-
-        res = curl_easy_perform(curl);
-
-        if (res != CURLE_OK) {
-            fprintf(stderr, "Request failed: %s\n", curl_easy_strerror(res));
-            curl_slist_free_all(headers);
-            curl_easy_cleanup(curl);
-            free(pair_res);
-            pair_res = NULL;
-            goto cleanup;
-        }
-
-        curl_slist_free_all(headers);
-        curl_easy_cleanup(curl);
+    if (!curl) {
+        fprintf(stderr, "Failed to initialize CURL\n");
+        pair_res = NULL;
+        goto cleanup;
     }
+
+    headers = curl_slist_append(headers, "User-Agent: Hi, Neal!");
+    headers = curl_slist_append(headers, "Accept: */*");
+    headers = curl_slist_append(headers, "Accept-Language: en-US,en;q=0.5");
+    headers = curl_slist_append(headers, "Alt-Used: neal.fun");
+    headers = curl_slist_append(headers, "Connection: keep_alive");
+    headers = curl_slist_append(headers, "Sec-Fetch-Dest: empty");
+    headers = curl_slist_append(headers, "Sec-Fetch-Mode: cors");
+    headers = curl_slist_append(headers, "Sec-Fetch-Site: same-origin");
+    headers = curl_slist_append(headers, "Sec-GPC: 1");
+    headers = curl_slist_append(headers, "Priority: u=0");
+
+    curl_easy_setopt(curl, CURLOPT_URL, url);
+    curl_easy_setopt(curl, CURLOPT_REFERER, "https://neal.fun/infinite-craft/");
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+    curl_easy_setopt(curl, CURLOPT_COOKIEFILE, "cookies.txt");
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 5L);
+
+    res = curl_easy_perform(curl);
+
+    curl_slist_free_all(headers);
+    curl_easy_cleanup(curl);
+
+    if (res != CURLE_OK) {
+        fprintf(stderr, "Request failed: %s\n", curl_easy_strerror(res));
+        free(pair_res);
+        pair_res = NULL;
+        goto cleanup;
+    }
+
+    pair_res = malloc(sizeof(ResultGET));
 
     json_object *parsed_json = json_tokener_parse(response);
 

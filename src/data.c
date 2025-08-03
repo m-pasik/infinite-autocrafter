@@ -11,6 +11,9 @@
 #define FNV_OFFSET_BASIS 14695981039346656037ULL
 #define FNV_PRIME 1099511628211ULL
 
+// Multiplier for hashing
+#define MULTIPLIER 0x9e3779b97f4a7c15ULL
+
 static uint64_t fnv1a_hash(const char *data)
 {
     uint64_t hash = FNV_OFFSET_BASIS;
@@ -39,9 +42,21 @@ static size_t hash_string(const char *data, uint8_t bits)
     return (size_t)(hash & mask);
 }
 
+static size_t hash_size_t(size_t key)
+{
+    return key * MULTIPLIER;
+}
+
+static size_t hash_id(size_t id, uint8_t bits)
+{
+    size_t hash = hash_size_t(id);
+    size_t mask = ((size_t)1 << bits) - 1;
+    return hash & mask;
+}
+
 static size_t hash_ids(size_t a, size_t b, uint8_t bits)
 {
-    size_t hash = hash_combine(a, b);
+    size_t hash = hash_combine(hash_size_t(a), hash_size_t(b));
 
     // Mask to fit the table size
     size_t mask = ((size_t)1 << bits) - 1;
@@ -106,7 +121,8 @@ void Data_init(Data *data, size_t reserve_items, size_t reserve_recipes, size_t 
         data->recipe_map.count = 0;
         data->recipe_map.load_factor = LOAD_FACTOR;
         data->recipe_map.bits = map_bits;
-        data->recipe_map.data = calloc(map_size, sizeof(Recipe *));
+        data->recipe_map.recipes = calloc(map_size, sizeof(Recipe *));
+        data->recipe_map.results = calloc(map_size, sizeof(Recipe *));
     }
 }
 
@@ -120,7 +136,8 @@ void Data_free(Data *data)
     free(data->item_arr.list);
     free(data->recipe_arr.list);
     free(data->item_map.data);
-    free(data->recipe_map.data);
+    free(data->recipe_map.recipes);
+    free(data->recipe_map.results);
 }
 
 Item *Data_item_get(Data *data, const char *text)
@@ -132,12 +149,22 @@ Item *Data_item_get(Data *data, const char *text)
     return NULL;
 }
 
+bool Data_has_recipe(Data *data, size_t id)
+{
+    const size_t hash = hash_id(id, data->recipe_map.bits);
+    size_t i;
+    for (i = hash; data->recipe_map.results[i]; i = (i + 1) & (data->recipe_map.size - 1))
+        if (data->recipe_map.results[i]->result == id)
+            return true;
+    return false;
+}
+
 Recipe *Data_recipe_get(Data *data, size_t first, size_t second)
 {
     const size_t hash = hash_ids(first, second, data->recipe_map.bits);
-    for (size_t i = hash; data->recipe_map.data[i]; i = (i + 1) & (data->recipe_map.size - 1))
-        if (data->recipe_map.data[i]->first == first && data->recipe_map.data[i]->second == second)
-            return data->recipe_map.data[i];
+    for (size_t i = hash; data->recipe_map.recipes[i]; i = (i + 1) & (data->recipe_map.size - 1))
+        if (data->recipe_map.recipes[i]->first == first && data->recipe_map.recipes[i]->second == second)
+            return data->recipe_map.recipes[i];
     return NULL;
 }
 
@@ -172,16 +199,20 @@ static void ItemMap_insert(ItemMap *item_map, Items *items, Item *item)
 
 static void RecipeMap_insert_internal(RecipeMap *recipe_map, Recipe *recipe)
 {
-    const size_t recipe_hash = hash_ids(recipe->first, recipe->second, recipe_map->bits);
+    const size_t recipe_hash = hash_ids(recipe->first, recipe->second, recipe_map->bits),
+                 result_hash = hash_id(recipe->result, recipe_map->bits);
     size_t i;
-    for (i = recipe_hash; recipe_map->data[i]; i = (i + 1) & (recipe_map->size - 1)) continue;
-    recipe_map->data[i] = recipe;
+    for (i = recipe_hash; recipe_map->recipes[i]; i = (i + 1) & (recipe_map->size - 1)) continue;
+    recipe_map->recipes[i] = recipe;
+    for (i = result_hash; recipe_map->results[i]; i = (i + 1) & (recipe_map->size - 1)) continue;
+    recipe_map->results[i] = recipe;
     recipe_map->count++;
 }
 
 static void RecipeMap_rehash(RecipeMap *recipe_map, Recipes *recipes)
 {
-    memset(recipe_map->data, 0, recipe_map->size * sizeof(Recipe *));
+    memset(recipe_map->recipes, 0, recipe_map->size * sizeof(Recipe *));
+    memset(recipe_map->results, 0, recipe_map->size * sizeof(Recipe *));
     recipe_map->count = 0;
     for (size_t i = 0; i < recipes->length; i++)
         RecipeMap_insert_internal(recipe_map, recipes->list + i);
@@ -192,7 +223,8 @@ static void RecipeMap_insert(RecipeMap *recipe_map, Recipes *recipes, Recipe *re
     if ((float)recipe_map->count / recipe_map->size > recipe_map->load_factor) {
         recipe_map->size *= 2;
         recipe_map->bits++;
-        recipe_map->data = realloc(recipe_map->data, recipe_map->size * sizeof(Recipe *));
+        recipe_map->recipes = realloc(recipe_map->recipes, recipe_map->size * sizeof(Recipe *));
+        recipe_map->results = realloc(recipe_map->recipes, recipe_map->size * sizeof(Recipe *));
         RecipeMap_rehash(recipe_map, recipes);
     } else {
         RecipeMap_insert_internal(recipe_map, recipe);
@@ -291,9 +323,9 @@ Recipe *Data_recipe_insert(Data *data, RecipeData recipe_dat, size_t result)
 
     const size_t recipe_hash = hash_ids(recipe_dat.first, recipe_dat.second, data->recipe_map.bits);
     size_t i;
-    for (i = recipe_hash; data->recipe_map.data[i]; i = (i + 1) & (data->recipe_map.size - 1)) {
-        if (data->recipe_map.data[i]->first == recipe_dat.first && data->recipe_map.data[i]->second == recipe_dat.second) {
-            recipe = data->recipe_map.data[i];
+    for (i = recipe_hash; data->recipe_map.recipes[i]; i = (i + 1) & (data->recipe_map.size - 1)) {
+        if (data->recipe_map.recipes[i]->first == recipe_dat.first && data->recipe_map.recipes[i]->second == recipe_dat.second) {
+            recipe = data->recipe_map.recipes[i];
             recipe_exists = true;
             break;
         }
