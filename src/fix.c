@@ -83,9 +83,8 @@ bool find_recipe(Data *data, Item *item)
             if (json_object_object_get_ex(parsed_json, "code", &code_obj))
                 code = json_object_get_int(code_obj);
             json_object_put(parsed_json);
-            printf("%d\n", code);
             if (code == 429) {
-                usleep(100000 * limited);
+                usleep(500000 * limited);
                 limited *= 2;
                 continue;
             } else {
@@ -134,7 +133,7 @@ bool find_recipe(Data *data, Item *item)
 
         json_object_put(parsed_json);
 
-        usleep(250000);
+        usleep(500000);
     } while (!found && offset < total);
 
     free(response);

@@ -46,7 +46,7 @@ int main(int argc, char **argv)
         for (size_t i = 4; i < items->length; i++) {
             if (!Data_has_recipe(save->data, items->list[i].id)) {
                 find_recipe(save->data, &items->list[i]);
-                usleep(250000);
+                usleep(500000);
             }
         }
     }
