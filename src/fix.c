@@ -59,6 +59,7 @@ bool find_recipe(Data *data, Item *item)
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 5L);
 
+    size_t limited = 1;
     do {
         snprintf(url, url_size, format, name_escaped, offset);
 
@@ -84,12 +85,16 @@ bool find_recipe(Data *data, Item *item)
             json_object_put(parsed_json);
             printf("%d\n", code);
             if (code == 429) {
-                usleep(5000000);
+                usleep(100000 * limited);
+                limited *= 2;
                 continue;
             } else {
+                limited = 1;
                 break;
             }
         }
+
+        limited = 1;
 
         total = json_object_get_uint64(total_obj);
 
@@ -108,6 +113,9 @@ bool find_recipe(Data *data, Item *item)
 
             const char *first_name = json_object_get_string(first_obj_id),
                        *second_name = json_object_get_string(second_obj_id);
+
+            if (!strcmp(first_name, item->text) || !strcmp(second_name, item->text))
+                continue;
 
             Item *first = Data_item_get(data, first_name),
                  *second = Data_item_get(data, second_name);

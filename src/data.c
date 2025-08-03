@@ -154,7 +154,9 @@ bool Data_has_recipe(Data *data, size_t id)
     const size_t hash = hash_id(id, data->recipe_map.bits);
     size_t i;
     for (i = hash; data->recipe_map.results[i]; i = (i + 1) & (data->recipe_map.size - 1))
-        if (data->recipe_map.results[i]->result == id)
+        if (data->recipe_map.results[i]->result == id
+            && data->recipe_map.results[i]->first != id
+            && data->recipe_map.results[i]->second != id)
             return true;
     return false;
 }
