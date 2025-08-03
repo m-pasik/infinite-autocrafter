@@ -77,8 +77,18 @@ bool find_recipe(Data *data, Item *item)
 
         if (!json_object_object_get_ex(parsed_json, "total", &total_obj)
             || !json_object_object_get_ex(parsed_json, "recipes", &recipes_obj)) {
+            json_object *code_obj;
+            int code = -1;
+            if (json_object_object_get_ex(parsed_json, "code", &code_obj))
+                code = json_object_get_int(code_obj);
             json_object_put(parsed_json);
-            break;
+            printf("%d\n", code);
+            if (code == 429) {
+                usleep(5000000);
+                continue;
+            } else {
+                break;
+            }
         }
 
         total = json_object_get_uint64(total_obj);
@@ -116,7 +126,7 @@ bool find_recipe(Data *data, Item *item)
 
         json_object_put(parsed_json);
 
-        usleep(100000);
+        usleep(250000);
     } while (!found && offset < total);
 
     free(response);

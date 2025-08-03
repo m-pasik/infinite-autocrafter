@@ -43,9 +43,12 @@ int main(int argc, char **argv)
         }
     } else if (!strcmp(argv[1], "fix")) {
         Items *items = &save->data->item_arr;
-        for (size_t i = 4; i < items->length; i++)
-            if (!Data_has_recipe(save->data, items->list[i].id))
+        for (size_t i = 4; i < items->length; i++) {
+            if (!Data_has_recipe(save->data, items->list[i].id)) {
                 find_recipe(save->data, &items->list[i]);
+                usleep(250000);
+            }
+        }
     }
 
     save_rename_old(filename);
